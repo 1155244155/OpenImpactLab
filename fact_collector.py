@@ -2,23 +2,22 @@ import json
 import os
 import time
 import requests
-import schedule   # pip install schedule  (lightweight, no extra dependencies)
 
 # =============================================
 # DESIGN (as required)
 # =============================================
 # Data Structure: List of dictionaries
-#   [{"text": "fact here"}, {"text": "another fact"}, ...]
+#   Example: [{"text": "Banging your head against a wall burns 150 calories an hour."}, ...]
 #
-# Storage Format: JSON file ("useless_facts_archive.json")
+# Storage Format: JSON ("useless_facts_archive.json")
 
 ARCHIVE_FILE = "useless_facts_archive.json"
 
 
 def load_facts():
-    """Load facts from local JSON archive."""
+    """Load existing facts from the local JSON archive."""
     if not os.path.exists(ARCHIVE_FILE):
-        print(f"📂 No archive found. Will create {ARCHIVE_FILE} on first save.")
+        print(f"📂 No archive found yet. Will create '{ARCHIVE_FILE}' automatically.")
         return []
     
     try:
@@ -27,30 +26,30 @@ def load_facts():
         print(f"✅ Loaded {len(facts)} facts from archive.")
         return facts
     except Exception as e:
-        print(f"⚠️ Error loading archive: {e}. Starting fresh.")
+        print(f"⚠️ Error loading archive ({e}). Starting fresh.")
         return []
 
 
 def save_facts(facts):
-    """Save facts to local JSON archive."""
+    """Save the updated list of facts back to the JSON archive."""
     try:
         with open(ARCHIVE_FILE, "w", encoding="utf-8") as f:
             json.dump(facts, f, indent=2, ensure_ascii=False)
-        print(f"💾 Archive saved successfully — now contains {len(facts)} facts.")
+        print(f"💾 Archive saved — now contains {len(facts)} unique facts.")
     except Exception as e:
         print(f"❌ Failed to save archive: {e}")
 
 
 def fetch_fact():
-    """Fetch one random useless fact from the API."""
-    url = "https://uselessfacts.jsph.pl/random.json?language=en"
+    """Fetch one random useless fact from the API (updated to v2 endpoint for reliability)."""
+    url = "https://uselessfacts.jsph.pl/api/v2/facts/random?language=en"
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
         return data.get("text", "No fact available")
     except requests.exceptions.RequestException as e:
-        print(f"❌ API error: {e}")
+        print(f"❌ API connection error: {e}")
         return None
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
@@ -58,77 +57,45 @@ def fetch_fact():
 
 
 def add_unique_fact():
-    """Fetch a fact, check for duplicate, and add it if new."""
+    """Fetch a fact, check for duplicate, and add only if it's new."""
     facts = load_facts()
     new_fact_text = fetch_fact()
 
     if new_fact_text is None:
-        print("⛔ Failed to fetch fact this cycle.")
+        print("⛔ Could not fetch a fact this time.")
         return
 
-    # Fast duplicate check using set
+    # Fast duplicate detection
     existing_texts = {fact["text"] for fact in facts}
 
     if new_fact_text in existing_texts:
-        print("🔄 Duplicate fact detected — skipping.")
-        print(f"   → {new_fact_text[:100]}{'...' if len(new_fact_text) > 100 else ''}")
+        print("🔄 Duplicate fact detected — skipping this cycle.")
+        print(f"   → {new_fact_text[:120]}{'...' if len(new_fact_text) > 120 else ''}")
         return
 
-    # Add new unique fact
+    # Add the new unique fact
     facts.append({"text": new_fact_text})
     save_facts(facts)
-    print("🎉 New unique fact added!")
+
+    print("🎉 New unique fact successfully added to the archive!")
     print(f"   → {new_fact_text}")
 
 
-def view_archive():
-    """Optional: Print all facts in the archive."""
-    facts = load_facts()
-    if not facts:
-        print("🪹 Archive is empty.")
-        return
-    print(f"\n📖 Archive contains {len(facts)} unique facts:")
-    for i, fact in enumerate(facts, 1):
-        print(f"{i:3d}. {fact['text']}")
-
-
 # =============================================
-# AUTOMATION MECHANISM
-# =============================================
-def run_continuous_collection():
-    """Run the collector in a loop using the 'schedule' library."""
-    print("🚀 Starting Useless Facts Continuous Collector")
-    print("   Facts will be fetched and added (if unique) every 5 minutes.")
-    print("   Press Ctrl+C to stop.\n")
-
-    # Schedule the job — you can change the interval easily
-    schedule.every(5).minutes.do(add_unique_fact)
-    # Alternative examples:
-    # schedule.every().hour.do(add_unique_fact)
-    # schedule.every(30).seconds.do(add_unique_fact)   # for testing
-
-    # Initial run immediately
-    print("📥 Performing initial fetch...")
-    add_unique_fact()
-
-    # Main scheduler loop
-    while True:
-        schedule.run_pending()
-        time.sleep(1)   # Small sleep to keep CPU usage low
-
-
-# =============================================
-# Main Entry Point
+# AUTOMATION (as required by the feedback)
 # =============================================
 if __name__ == "__main__":
-    # For quick testing: run once only (uncomment if needed)
-    # add_unique_fact()
-    # view_archive()
+    print("🚀 Useless Facts Continuous Collector Started")
+    print("   Fetching a new fact every 60 seconds (only unique ones are saved)")
+    print("   Press Ctrl + C to stop the collector.\n")
 
-    # For continuous automatic collection (as required)
     try:
-        run_continuous_collection()
+        while True:
+            add_unique_fact()
+            print(f"⏳ Waiting 60 seconds before next fetch...\n")
+            time.sleep(60)   # Change to 300 for 5 minutes, 3600 for 1 hour, etc.
+
     except KeyboardInterrupt:
-        print("\n\n👋 Collector stopped by user. Archive is safely saved.")
+        print("\n\n👋 Collector stopped by user. Your archive is safely saved on disk.")
     except Exception as e:
-        print(f"\n❌ Unexpected error in collector: {e}")
+        print(f"\n❌ Unexpected error: {e}")
