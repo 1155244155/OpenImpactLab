@@ -1,59 +1,56 @@
 from ddgs import DDGS
-import json
-from typing import List, Dict
+from typing import List, Dict, Any
 
-def perform_web_search(query: str, max_results: int = 10) -> List[Dict]:
+def perform_web_search(query: str, max_results: int = 10) -> List[Dict[str, Any]]:
     """
-    Perform a web search and return raw results with title, URL, and snippet.
+    Perform a web search using DDGS (DuckDuckGo metasearch) and return raw results.
+    Prints titles, URLs, and snippets clearly.
     """
     print(f"🔍 Searching the web for: '{query}' ...\n")
     
     try:
         with DDGS() as ddgs:
+            # Use text search with multiple backends for better coverage
             results = list(ddgs.text(query, max_results=max_results))
         
         if not results:
-            print("❌ No results found for the query.")
+            print("❌ No results found for this query.")
             return []
         
         print(f"✅ Found {len(results)} relevant results:\n")
         
         for i, result in enumerate(results, 1):
-            title = result.get('title', 'No title')
-            url = result.get('href', 'No URL')
-            snippet = result.get('body', 'No snippet available')
+            title = result.get("title", "No title available")
+            url = result.get("href", result.get("url", "No URL available"))
+            snippet = result.get("body", result.get("snippet", "No snippet available"))
             
             print(f"{i}. **{title}**")
             print(f"   📎 URL: {url}")
             print(f"   📝 Snippet: {snippet[:280]}{'...' if len(snippet) > 280 else ''}")
-            print("-" * 85)
+            print("-" * 90)
         
-        return results  # List of dicts for further processing (e.g., feed to Gemini)
+        return results  # Structured list of dicts for future integration
         
     except Exception as e:
-        print(f"❌ Search error: {e}")
-        print("   Tip: Try again in a moment — occasional rate limits can occur.")
+        print(f"❌ Error during web search: {e}")
+        print("   Tip: This can happen occasionally due to rate limits. Try again shortly.")
         return []
 
 
-# Interactive demo / test
+# Interactive test / standalone mode
 if __name__ == "__main__":
-    print("🌐 Web Search Tool (using DDGS / DuckDuckGo)\n")
-    print("Type your search query below. Type 'exit' or 'quit' to stop.\n")
+    print("🌐 Web Search Tool Ready (powered by DDGS)\n")
+    print("Enter a search query. Type 'exit', 'quit', or 'bye' to stop.\n")
     
     while True:
-        query = input("🔎 Search query: ").strip()
+        query = input("🔎 Enter search query: ").strip()
         
-        if query.lower() in ['exit', 'quit', 'bye']:
+        if query.lower() in ["exit", "quit", "bye"]:
             print("👋 Web search tool closed.")
             break
         
         if not query:
-            print("Please enter a valid search query.\n")
+            print("Please enter a search query.\n")
             continue
         
-        results = perform_web_search(query, max_results=8)
-        
-        # Optional: Save results to JSON file
-        # with open(f"search_results_{query[:30]}.json", "w", encoding="utf-8") as f:
-        #     json.dump(results, f, indent=2, ensure_ascii=False)
+        perform_web_search(query, max_results=8)
