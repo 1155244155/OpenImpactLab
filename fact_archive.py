@@ -2,110 +2,111 @@ import json
 import os
 import requests
 
-# === DESIGN CHOICES ===
-# Data structure: List of dictionaries
-#   Example: [{"text": "Banging your head against a wall burns 150 calories an hour."}, ...]
-#   Why? Simple, extensible (easy to add fields like "date_added" later), and matches the
-#        suggestion in the query. Each fact is stored exactly as returned by the API.
+# =============================================
+# DESIGN DECISIONS (as required)
+# =============================================
+# Data Structure : List of dictionaries
+#   Format: [{"text": "The fact here"}, {"text": "Another fact"}, ...]
 #
-# Storage format: JSON file ("useless_facts_archive.json")
-#   Why? Human-readable, preserves order, handles Unicode facts perfectly, no extra
-#        dependencies beyond the Python standard library (json + os). JSON is also
-#        easy to version-control or share if you ever want to move the archive.
-#
-# Core logic:
-#   - load_facts() returns the list (or empty list if file missing/corrupt)
-#   - save_facts() writes the list back to disk
-#   - Duplicate check uses a set comprehension for O(1) lookup speed (critical even
-#     when the archive grows to thousands of facts)
-#   - The original fetch logic from fetch_fact.py is reused exactly, wrapped in a
-#     reusable function.
+# Storage Format : JSON file
+#   Filename: useless_facts_archive.json
+#   Why JSON? Human-readable, easy to extend, handles text perfectly.
 
-def load_facts(filename="useless_facts_archive.json"):
-    """Load existing facts from the local JSON archive."""
-    if os.path.exists(filename):
-        try:
-            with open(filename, "r", encoding="utf-8") as f:
-                facts = json.load(f)
-            print(f"✅ Loaded {len(facts)} facts from archive '{filename}'.")
-            return facts
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"⚠️  Corrupt or unreadable archive. Starting fresh. Error: {e}")
-            return []
-    else:
-        print(f"📂 No archive found yet. Will create '{filename}' on first save.")
+ARCHIVE_FILE = "useless_facts_archive.json"
+
+
+def load_facts():
+    """Load existing facts from the local JSON file."""
+    if not os.path.exists(ARCHIVE_FILE):
+        print(f"📂 No archive found. Starting fresh archive: {ARCHIVE_FILE}")
+        return []
+    
+    try:
+        with open(ARCHIVE_FILE, "r", encoding="utf-8") as f:
+            facts = json.load(f)
+        print(f"✅ Loaded {len(facts)} facts from archive.")
+        return facts
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"⚠️ Error reading archive. Starting fresh. ({e})")
         return []
 
 
-def save_facts(facts, filename="useless_facts_archive.json"):
-    """Save the list of facts to the local JSON archive."""
+def save_facts(facts):
+    """Save the list of facts to the local JSON file."""
     try:
-        with open(filename, "w", encoding="utf-8") as f:
+        with open(ARCHIVE_FILE, "w", encoding="utf-8") as f:
             json.dump(facts, f, indent=2, ensure_ascii=False)
-        print(f"💾 Archive successfully saved ({len(facts)} facts total).")
+        print(f"💾 Successfully saved {len(facts)} facts to {ARCHIVE_FILE}")
     except IOError as e:
         print(f"❌ Failed to save archive: {e}")
 
 
 def fetch_fact():
-    """Fetch one random useless fact (exact logic from the provided fetch_fact.py)."""
+    """Fetch one random useless fact from the API."""
     url = "https://uselessfacts.jsph.pl/random.json?language=en"
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
-        fact = data.get("text", "No fact available")
-        return fact
+        fact_text = data.get("text", "No fact available")
+        return fact_text
     except requests.exceptions.RequestException as e:
-        print(f"❌ Error connecting to the API: {e}")
+        print(f"❌ API connection error: {e}")
         return None
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
         return None
 
 
-def add_fact_if_unique():
-    """Main function: fetch → check duplicate → save if new. Builds the persistent knowledge base."""
-    # 1. Load current archive
+def add_new_fact():
+    """Main function: Fetch fact → Check duplicate → Save if unique."""
+    # Step 1: Load existing facts
     facts = load_facts()
 
-    # 2. Fetch a new fact
+    # Step 2: Fetch a new fact
     new_fact_text = fetch_fact()
     if new_fact_text is None:
-        print("⛔ Could not fetch a fact. Archive unchanged.")
+        print("⛔ Could not fetch a fact this time.")
         return
 
-    # 3. Crucial duplicate check (set for instant lookup)
-    existing_texts = {fact_dict["text"] for fact_dict in facts}
-    if new_fact_text in existing_texts:
-        print("🔄 Duplicate fact detected – not added to archive.")
-        print(f"   Fact: {new_fact_text}")
+    # Step 3: Check for duplicate (crucial requirement)
+    # Using set for fast lookup
+    existing_facts = {fact["text"] for fact in facts}
+    
+    if new_fact_text in existing_facts:
+        print("🔄 This fact already exists in the archive. Not added.")
+        print(f"   → {new_fact_text}")
         return
 
-    # 4. Add the new unique fact
+    # Step 4: Add the new unique fact and save
     facts.append({"text": new_fact_text})
     save_facts(facts)
 
-    print("🎉 New unique fact added to your persistent knowledge base!")
-    print(f"   {new_fact_text}")
+    print("🎉 New unique fact successfully added to archive!")
+    print(f"   → {new_fact_text}")
 
 
-# Optional helper to inspect the archive (demonstrates loading)
-def view_all_facts():
-    """Load and display every fact currently in the archive."""
+# Optional: View all stored facts
+def view_archive():
+    """Display all facts currently in the archive."""
     facts = load_facts()
     if not facts:
-        print("🪹 Archive is empty.")
+        print("🪹 The archive is currently empty.")
         return
-    print(f"\n📖 Your Useless Facts Archive ({len(facts)} facts):")
-    for i, fact_dict in enumerate(facts, 1):
-        print(f"{i:3d}. {fact_dict['text']}")
+    
+    print(f"\n📖 Useless Facts Archive — {len(facts)} facts total:")
+    for i, fact in enumerate(facts, 1):
+        print(f"{i:3d}. {fact['text']}")
 
 
-# === RUN THE PROGRAM ===
+# =============================================
+# Main Execution
+# =============================================
 if __name__ == "__main__":
-    print("🧠 Useless Facts Persistent Knowledge Base Builder")
-    print("=" * 60)
-    add_fact_if_unique()
-    # Uncomment the line below anytime to see the full archive:
-    # view_all_facts()
+    print("🧠 Useless Facts Knowledge Base Builder")
+    print("=" * 55)
+    
+    add_new_fact()
+    
+    # Uncomment the line below if you want to see the full archive after adding:
+    # view_archive()
